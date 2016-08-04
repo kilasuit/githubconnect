@@ -107,12 +107,27 @@ Function Get-GithubOwnRepositories {
 
         if ($GithubPersonalOAuthToken) {
         try {
-                $json = Invoke-WebRequest -Uri https://api.github.com/user/repos -Method Get -Headers @{"Authorization"="token $GithubPersonalOAuthToken"} -ErrorAction Stop
+                $repos = @()
+                $web = Invoke-WebRequest -Uri https://api.github.com/user/repos -Method Get -Headers @{"Authorization"="token $GithubPersonalOAuthToken"} -ErrorAction Stop
+                $page1 = Invoke-RestMethod -Uri https://api.github.com/user/repos -Method Get -Headers @{"Authorization"="token $GithubPersonalOAuthToken"} -ErrorAction Stop
+                $page1 | ForEach-Object { $repos += $_  }
+                if ($web.Headers.Keys.Contains('Link'))
+                {
+                    $LastLink = $web.Headers.Link.Split(',')[1].replace('<','').replace('>','').replace(' ','').replace('rel="last"','').replace(';','')
+                    [int]$last = $($lastlink[($lastlink.ToCharArray().count -1)]).tostring()
+                    $pages = 1..$last
+                    foreach ($page in $pages)
+                        {
+                        Invoke-RestMethod -Uri "https://api.github.com/user/repos?page=$page" -Method Get -Headers @{"Authorization"="token $GithubPersonalOAuthToken"} | ForEach-Object { $repos += $_  }
+                        }
+                }            
+            
             }
             catch {
                 Write-Error -Message $_
             }
         }
+        <#
         if (-not (($GithubPersonalOAuthToken) -or ($BasicCreds))) {
             throw 'Please run Connect-Github first to get an authentication token for Github'
         }
@@ -133,23 +148,26 @@ Function Get-GithubOwnRepositories {
                 Write-Error -Message $_
             }
         }
-        [System.Collections.ArrayList]$repos = @()
+        #>
 
-        $con_json = ConvertFrom-Json -InputObject $json.Content
-        foreach ($repo in $con_json) {
+        [System.Collections.ArrayList]$myrepos = @()
+
+        
+        foreach ($repo in $repos) {
                 $defaultProperties = @(‘Name’,’Description’)
                 $defaultDisplayPropertySet = New-Object System.Management.Automation.PSPropertySet(‘DefaultDisplayPropertySet’,[string[]]$defaultProperties)
                 $PSStandardMembers = [System.Management.Automation.PSMemberInfo[]]@($defaultDisplayPropertySet)
                 $repo | Add-Member MemberSet PSStandardMembers $PSStandardMembers
-                $repos += $repo
+                $myrepos += $repo
         }
-        $repos
+        $myrepos | Sort-Object
     }
-    End {
+    End {<#
         Remove-Variable -Name json -Force
-        Remove-Variable -Name con_json -Force
+        Remove-Variable -Name myrepos -Force
         Remove-Variable -Name repos -Force
         Remove-Variable -Name repo -Force
+        #>
     }
 }
 
@@ -383,8 +401,46 @@ $repos.Name | foreach {Invoke-RestMethod -Method Put -Uri "https://api.github.co
 
 }
 
+Function New-GithubForkedRepository {
+[CmdletBinding(DefaultParametersetName='Basic')]
+    param (
+        
+        [Parameter(mandatory=$true,ParametersetName='Basic')]
+        [Parameter(mandatory=$true,ParametersetName='ToOrg')]
+        [string]$OrganisationName,
+
+        [Parameter(mandatory=$true,ParametersetName='Basic')]
+        [Parameter(mandatory=$true,ParametersetName='ToOrg')]
+        [string]$Repository,
+
+        [Parameter(mandatory=$true,ParametersetName='ToOrg')]
+        [Switch]$ToOrg,
+
+        [Parameter(mandatory=$true,ParametersetName='ToOrg')]
+        [string]$DestinationOrganisationName
 
 
+    )
+    If (!($ToOrg)) {
+    $params = @{ URI = "https://api.github.com/repos/$OrganisationName/$Repository/forks";
+             Method ='POST';
+             Headers = @{"Authorization"="token $GithubPersonalOAuthToken"}
+             Verbose = $VerbosePreference
+           }
+    }
+    else 
+    {
+    # Issue with API Page at https://developer.github.com/v3/repos/forks/ for the API endpoint to use
+    # Fix actually shown on https://developer.github.com/changes/2012-11-27-forking-to-organizations/
+    $params = @{ URI = "https://api.github.com/repos/$OrganisationName/$Repository/forks";
+             Method ='POST';
+             Body = @{"Organization" = "$DestinationOrganisationName"} | ConvertTo-Json # Not Required but shown on API page
+             Headers = @{"Authorization" = "token $GithubPersonalOAuthToken"}
+             Verbose = $VerbosePreference
+           }
+    }
+ 
+    Invoke-RestMethod @params 
 
-
+}
 
