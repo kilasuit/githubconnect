@@ -422,7 +422,8 @@ Function New-GithubForkedRepository {
 
     )
     If (!($ToOrg)) {
-    $params = @{ URI = "https://api.github.com/repos/$OrganisationName/$Repository/forks";
+    $params = @{ 
+             URI = "https://api.github.com/repos/$OrganisationName/$Repository/forks";
              Method ='POST';
              Headers = @{"Authorization"="token $GithubPersonalOAuthToken"}
              Verbose = $VerbosePreference
@@ -432,7 +433,8 @@ Function New-GithubForkedRepository {
     {
     # Issue with API Page at https://developer.github.com/v3/repos/forks/ for the API endpoint to use
     # Fix actually shown on https://developer.github.com/changes/2012-11-27-forking-to-organizations/
-    $params = @{ URI = "https://api.github.com/repos/$OrganisationName/$Repository/forks";
+    $params = @{ 
+             URI = "https://api.github.com/repos/$OrganisationName/$Repository/forks";
              Method ='POST';
              Body = @{"Organization" = "$DestinationOrganisationName"} | ConvertTo-Json # Not Required but shown on API page
              Headers = @{"Authorization" = "token $GithubPersonalOAuthToken"}
